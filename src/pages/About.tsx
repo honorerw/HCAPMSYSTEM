@@ -1,5 +1,6 @@
 import React from 'react';
 import { Container, Typography, Grid, Paper, Box } from '@mui/material';
+import { Phone, Email } from '@mui/icons-material';
 import { useThemeContext } from '../contexts/ThemeContext';
 
 import developerImage from '../assets/developer.jpeg';
@@ -101,6 +102,14 @@ const About: React.FC = () => {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Full Stack Developer
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                <Phone sx={{ fontSize: 16, color: 'primary.main' }} />
+                <Typography variant="body2" color="text.secondary">+250 791 733 808</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Email sx={{ fontSize: 16, color: 'primary.main' }} />
+                <Typography variant="body2" color="text.secondary">ifitebyoseelina@gmail.com</Typography>
+              </Box>
               <Typography variant="body2" color="text.secondary">
                 Passionate about building modern healthcare solutions that make a difference.
                 Based in Kigali, Rwanda.

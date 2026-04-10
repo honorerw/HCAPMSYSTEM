@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Grid, Card, CardContent, Typography, Button, Box, AppBar, Toolbar, IconButton, Menu, MenuItem } from '@mui/material';
+import developerImage from '../assets/developer.jpeg';
 import { 
   KeyboardArrowRight, 
   Person, 
@@ -504,7 +505,7 @@ const Landing: React.FC = () => {
                 Developer
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box component="img" src={logoImage} alt="HCAPMS Logo" sx={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 2 }} />
+                <Box component="img" src={developerImage} alt="Developer" sx={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 2 }} />
                 <Box>
                   <Typography sx={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>IFITEBYOSE Elina</Typography>
                   <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>Full Stack Developer</Typography>
