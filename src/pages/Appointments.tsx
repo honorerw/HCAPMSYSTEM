@@ -5,7 +5,7 @@ import {
   InputAdornment
 } from '@mui/material';
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
-import { Edit, Delete, Search, CalendarToday, ArrowBack } from '@mui/icons-material';
+import { Edit, Delete, Search, CalendarToday, ArrowBack, Print, Download } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { dummyAppointments, dummyPatients, dummyDoctors, type Appointment } from '../data/dummyData';
@@ -38,15 +38,25 @@ const Appointments: React.FC = () => {
 
   const isPatient = user?.role === 'patient';
   const isAdmin = user?.role === 'admin';
+  const isDoctor = user?.role === 'doctor';
 
   const matchedPatient = isPatient ? dummyPatients.find(p => 
     user.name && p.name.toLowerCase().includes(user.name.toLowerCase().split(' ').pop() || '')
   ) : null;
   const patientId = matchedPatient?.id;
 
+  const matchedDoctor = isDoctor ? dummyDoctors.find(d => 
+    d.name.toLowerCase().includes(user.name?.toLowerCase().split(' ').pop() || '') ||
+    user.name?.toLowerCase().includes(d.name.toLowerCase().replace('dr. ', ''))
+  ) : null;
+  const doctorId = matchedDoctor?.id;
+
   const filteredAppointments = appointments.filter(apt => {
     if (isPatient && patientId) {
       return apt.patientId === patientId;
+    }
+    if (isDoctor && doctorId) {
+      return apt.doctorId === doctorId;
     }
     const patientName = getPatientName(apt.patientId).toLowerCase();
     const doctorName = getDoctorName(apt.doctorId).toLowerCase();
@@ -78,7 +88,7 @@ const Appointments: React.FC = () => {
       setAppointments(appointments.map(a => a.id === editingAppointment.id ? { ...a, ...formData } as Appointment : a));
     } else {
       const newAppointment: Appointment = {
-        ...formData as Appointment,
+        ...(formData as Appointment),
         id: Math.max(...appointments.map(a => a.id)) + 1
       };
       setAppointments([...appointments, newAppointment]);
@@ -125,31 +135,47 @@ const Appointments: React.FC = () => {
         />
       )
     },
-    {
-      field: 'actions', headerName: 'Actions', width: 100, sortable: false,
-      renderCell: (params: GridRenderCellParams) => isAdmin ? (
-        <Box>
-          <IconButton size="small" onClick={() => handleOpenDialog(params.row)} color="primary">
-            <Edit fontSize="small" />
-          </IconButton>
-          <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
-            <Delete fontSize="small" />
-          </IconButton>
-        </Box>
-      ) : null
-    }
   ];
 
-  const upcomingAppointments = appointments
+  const upcomingAppointments = filteredAppointments
     .filter(a => new Date(a.date) >= new Date() && a.status !== 'Cancelled')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5);
 
   const stats = {
-    total: appointments.length,
-    confirmed: appointments.filter(a => a.status === 'Confirmed').length,
-    pending: appointments.filter(a => a.status === 'Pending').length,
-    cancelled: appointments.filter(a => a.status === 'Cancelled').length
+    total: filteredAppointments.length,
+    confirmed: filteredAppointments.filter(a => a.status === 'Confirmed').length,
+    pending: filteredAppointments.filter(a => a.status === 'Pending').length,
+    cancelled: filteredAppointments.filter(a => a.status === 'Cancelled').length
+  };
+
+  const generateReport = () => {
+    const headers = ['ID', 'Patient', 'Doctor', 'Date', 'Time', 'Status', 'Type'];
+    const rows = filteredAppointments.map(a => [
+      String(a.id), a.patientName || getPatientName(a.patientId), a.doctorName || getDoctorName(a.doctorId), a.date, a.time, a.status, a.type
+    ]);
+    return { headers, rows };
+  };
+
+  const handlePrintReport = () => {
+    const { headers, rows } = generateReport();
+    const content = `<!DOCTYPE html><html><head><title>Appointment Report</title><style>body{font-family:Arial,sans-serif;margin:20px}.header{text-align:center;margin-bottom:30px}.header h1{color:#667eea;margin-bottom:5px}.header p{color:#666;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#667eea;color:white;padding:12px 8px;text-align:left}td{padding:8px;border:1px solid #ddd}tr:nth-child(even){background:#f9f9f9}.footer{margin-top:30px;text-align:center;font-size:12px;color:#666}@media print{.no-print{display:none}}</style></head><body><div class="header"><h1>Appointment Scheduling Report</h1><p>Healthcare Patient Management System (HCAPMS)</p><p>Generated:${new Date().toLocaleDateString()}</p><p>Total Appointments:${filteredAppointments.length}</p></div><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="footer"><p>HCAPMS</p></div><button onclick="window.print()" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#667eea;color:white;border:none;border-radius:5px;cursor:pointer">Print</button></body></html>`;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) { printWindow.document.write(content); printWindow.document.close(); printWindow.focus(); }
+  };
+
+  const handleDownloadReport = () => {
+    const { headers, rows } = generateReport();
+    const content = `<!DOCTYPE html><html><head><title>Appointment Report</title><style>body{font-family:Arial,sans-serif;margin:20px}.header{text-align:center;margin-bottom:30px}.header h1{color:#667eea;margin-bottom:5px}.header p{color:#666;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#667eea;color:white;padding:12px 8px;text-align:left}td{padding:8px;border:1px solid #ddd}tr:nth-child(even){background:#f9f9f9}.footer{margin-top:30px;text-align:center;font-size:12px;color:#666}</style></head><body><div class="header"><h1>Appointment Scheduling Report</h1><p>Healthcare Patient Management System (HCAPMS)</p><p>Generated:${new Date().toLocaleDateString()}</p><p>Total Appointments:${filteredAppointments.length}</p></div><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="footer"><p>HCAPMS</p></div></body></html>`;
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Appointment_Report_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -160,19 +186,18 @@ const Appointments: React.FC = () => {
             <ArrowBack />
           </IconButton>
           <Typography variant="h4" sx={{ fontWeight: 600 }}>
-            {isPatient ? 'My Appointments' : 'Appointment Scheduling'}
+            {(isPatient || isDoctor) ? 'My Appointments' : 'Appointment Scheduling'}
           </Typography>
         </Box>
-        {isAdmin && (
-          <Button
-            variant="contained"
-            startIcon={<CalendarToday />}
-            onClick={() => handleOpenDialog()}
-            sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-          >
-            New Appointment
-          </Button>
-        )}
+<Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="outlined" startIcon={<Print />} onClick={handlePrintReport} sx={{ borderColor: '#667eea', color: '#667eea' }}>Print</Button>
+          <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadReport} sx={{ borderColor: '#667eea', color: '#667eea' }}>Download</Button>
+          {isAdmin && (
+            <Button variant="contained" startIcon={<CalendarToday />} onClick={() => handleOpenDialog()} sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+              New Appointment
+            </Button>
+          )}
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
@@ -234,9 +259,14 @@ const Appointments: React.FC = () => {
           columns={columns}
           pageSizeOptions={[5, 10, 25]}
           pagination
-          paginationMode="server"
+          paginationMode="client"
+          rowCount={filteredAppointments.length}
           paginationModel={{ page, pageSize: rowsPerPage }}
-          onPaginationModelChange={(model: { page: number; pageSize: number }) => { setPage(model.page); setRowsPerPage(model.pageSize); }}
+          onPaginationModelChange={(model: { page: number; pageSize: number }) => { 
+            if (model.pageSize !== rowsPerPage) setPage(0);
+            else setPage(model.page);
+            setRowsPerPage(model.pageSize); 
+          }}
           disableRowSelectionOnClick
           sx={{
             border: 'none',

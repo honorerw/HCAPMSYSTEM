@@ -5,11 +5,12 @@ import {
   Chip, FormControl, InputLabel, Select, MenuItem, Tab, Tabs, InputAdornment
 } from '@mui/material';
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
-import { Edit, Delete, Search, Description, ArrowBack } from '@mui/icons-material';
+import { Edit, Delete, Search, Description, ArrowBack, Print, Download } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { dummyPatients, dummyDoctors } from '../data/dummyData';
 import { useThemeContext } from '../contexts/ThemeContext';
+import { FileUpload } from '../components/FileUpload';
 
 interface MedicalRecord {
   id: number;
@@ -20,6 +21,7 @@ interface MedicalRecord {
   type: 'Consultation' | 'Lab Result' | 'Prescription' | 'Imaging' | 'Follow-up';
   diagnosis: string;
   notes: string;
+  document?: string;
 }
 
 const initialRecords: MedicalRecord[] = [
@@ -52,6 +54,7 @@ const Records: React.FC = () => {
   const [viewRecord, setViewRecord] = useState<MedicalRecord | null>(null);
   const [formData, setFormData] = useState<Partial<MedicalRecord>>({});
   const [currentTab, setCurrentTab] = useState(0);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
 
   const getPatientName = (id: number) => dummyPatients.find(p => p.id === id)?.name || 'Unknown';
   const getDoctorName = (id: number) => dummyDoctors.find(d => d.id === id)?.name || 'Unknown';
@@ -76,10 +79,12 @@ const Records: React.FC = () => {
     if (record) {
       setEditingRecord(record);
       setFormData(record);
+      setDocumentFile(null);
     } else {
       setEditingRecord(null);
       const today = new Date().toISOString().split('T')[0];
       setFormData({ patientId: 0, doctorId: 0, date: today, type: 'Consultation', diagnosis: '', notes: '' });
+      setDocumentFile(null);
     }
     setOpenDialog(true);
   };
@@ -90,12 +95,22 @@ const Records: React.FC = () => {
     setFormData({});
   };
 
-  const handleSaveRecord = () => {
+  const handleSaveRecord = async () => {
+    let documentUrl = formData.document;
+    if (documentFile) {
+      documentUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(documentFile);
+      });
+    }
+    
     if (editingRecord) {
-      setRecords(records.map(r => r.id === editingRecord.id ? { ...r, ...formData } as MedicalRecord : r));
+      setRecords(records.map(r => r.id === editingRecord.id ? { ...r, ...formData, document: documentUrl } as MedicalRecord : r));
     } else {
       const newRecord: MedicalRecord = {
-        ...formData as MedicalRecord,
+        ...(formData as MedicalRecord),
+        document: documentUrl,
         id: Date.now(),
       };
       setRecords([...records, newRecord]);
@@ -172,6 +187,35 @@ const Records: React.FC = () => {
     },
   ];
 
+  const generateReport = () => {
+    const headers = ['ID', 'Date', 'Patient', 'Doctor', 'Type', 'Diagnosis', 'Notes'];
+    const rows = filteredRecords.map(r => [
+      String(r.id), r.date, getPatientName(r.patientId), getDoctorName(r.doctorId), r.type, r.diagnosis, r.notes || '-'
+    ]);
+    return { headers, rows };
+  };
+
+  const handlePrintReport = () => {
+    const { headers, rows } = generateReport();
+    const content = `<!DOCTYPE html><html><head><title>Medical Records Report</title><style>body{font-family:Arial,sans-serif;margin:20px}.header{text-align:center;margin-bottom:30px}.header h1{color:#667eea;margin-bottom:5px}.header p{color:#666;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#667eea;color:white;padding:12px 8px;text-align:left}td{padding:8px;border:1px solid #ddd}tr:nth-child(even){background:#f9f9f9}.footer{margin-top:30px;text-align:center;font-size:12px;color:#666}@media print{.no-print{display:none}}</style></head><body><div class="header"><h1>Medical Records Report</h1><p>Healthcare Patient Management System (HCAPMS)</p><p>Generated:${new Date().toLocaleDateString()}</p><p>Total Records:${filteredRecords.length}</p></div><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="footer"><p>CONFIDENTIAL - Healthcare Patient Management System</p></div><button onclick="window.print()" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#667eea;color:white;border:none;border-radius:5px;cursor:pointer">Print</button></body></html>`;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) { printWindow.document.write(content); printWindow.document.close(); printWindow.focus(); }
+  };
+
+  const handleDownloadReport = () => {
+    const { headers, rows } = generateReport();
+    const content = `<!DOCTYPE html><html><head><title>Medical Records Report</title><style>body{font-family:Arial,sans-serif;margin:20px}.header{text-align:center;margin-bottom:30px}.header h1{color:#667eea;margin-bottom:5px}.header p{color:#666;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#667eea;color:white;padding:12px 8px;text-align:left}td{padding:8px;border:1px solid #ddd}tr:nth-child(even){background:#f9f9f9}.footer{margin-top:30px;text-align:center;font-size:12px;color:#666}</style></head><body><div class="header"><h1>Medical Records Report</h1><p>Healthcare Patient Management System (HCAPMS)</p><p>Generated:${new Date().toLocaleDateString()}</p><p>Total Records:${filteredRecords.length}</p></div><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="footer"><p>CONFIDENTIAL - Healthcare Patient Management System</p></div></body></html>`;
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Medical_Records_Report_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Container maxWidth="xl" sx={{ mt: 8, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -183,14 +227,13 @@ const Records: React.FC = () => {
             Medical Records
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Description />}
-          onClick={() => handleOpenDialog()}
-          sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-        >
-          New Record
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="outlined" startIcon={<Print />} onClick={handlePrintReport} sx={{ borderColor: '#667eea', color: '#667eea' }}>Print</Button>
+          <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadReport} sx={{ borderColor: '#667eea', color: '#667eea' }}>Download</Button>
+          <Button variant="contained" startIcon={<Description />} onClick={() => handleOpenDialog()} sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            New Record
+          </Button>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
@@ -261,9 +304,14 @@ const Records: React.FC = () => {
           columns={columns}
           pageSizeOptions={[5, 10, 25]}
           pagination
-          paginationMode="server"
+          paginationMode="client"
+          rowCount={filteredRecords.length}
           paginationModel={{ page, pageSize: rowsPerPage }}
-          onPaginationModelChange={(model: { page: number; pageSize: number }) => { setPage(model.page); setRowsPerPage(model.pageSize); }}
+          onPaginationModelChange={(model: { page: number; pageSize: number }) => { 
+            if (model.pageSize !== rowsPerPage) setPage(0);
+            else setPage(model.page);
+            setRowsPerPage(model.pageSize); 
+          }}
           disableRowSelectionOnClick
           sx={{
             border: 'none',
@@ -343,6 +391,13 @@ const Records: React.FC = () => {
               rows={3}
               value={formData.notes || ''}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            />
+            <FileUpload
+              onFileSelect={setDocumentFile}
+              acceptedTypes={['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']}
+              maxSizeMB={5}
+              label="Upload Document"
+              currentValue={formData.document}
             />
           </Box>
         </DialogContent>

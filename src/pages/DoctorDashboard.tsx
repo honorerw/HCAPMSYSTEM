@@ -1,17 +1,53 @@
-import React, { useState } from 'react';
-import { Container, Typography, Box, Grid, Paper, Card, CardContent, Button, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, AppBar, Toolbar, Menu, MenuItem, FormControl, InputLabel, Select, Chip, Switch, FormControlLabel } from '@mui/material';
-import { People, CalendarToday, Description, TrendingUp, Logout, Settings, Close, AccountCircle, Edit, Delete } from '@mui/icons-material';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, Grid, Paper, Card, CardContent, Button, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Menu, MenuItem, FormControl, InputLabel, Select, Chip, Switch, FormControlLabel, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import { People, CalendarToday, Description, TrendingUp, Logout, Settings, Close, AccountCircle, Edit, Delete, Search, Add, Dashboard as DashboardIcon, Person } from '@mui/icons-material';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
-import { dummyAppointments, dummyDoctors, dummyPatients, type Doctor, type Appointment } from '../data/dummyData';
+import { dummyAppointments, dummyDoctors, dummyPatients, type Doctor, type Appointment, type Patient } from '../data/dummyData';
 import logoImage from '../assets/logo.png';
+
+const drawerWidth = 260;
+
+interface MedicalRecord {
+  id: number;
+  patientId: number;
+  doctorId: number;
+  date: string;
+  type: 'Consultation' | 'Lab Result' | 'Prescription' | 'Imaging' | 'Follow-up';
+  diagnosis: string;
+  notes: string;
+}
+
+const initialRecords: MedicalRecord[] = [
+  { id: 1, patientId: 1, doctorId: 1, date: '2024-10-15', type: 'Consultation', diagnosis: 'Hypertension', notes: 'Patient complained of headaches' },
+  { id: 2, patientId: 2, doctorId: 2, date: '2024-10-16', type: 'Follow-up', diagnosis: 'Diabetes check', notes: 'Blood sugar levels normal' },
+  { id: 3, patientId: 3, doctorId: 1, date: '2024-10-17', type: 'Lab Result', diagnosis: 'Blood test results', notes: 'All parameters within range' },
+  { id: 4, patientId: 4, doctorId: 1, date: '2024-10-18', type: 'Prescription', diagnosis: 'Seasonal allergies', notes: 'Prescribed antihistamines' },
+  { id: 5, patientId: 5, doctorId: 1, date: '2024-10-19', type: 'Consultation', diagnosis: 'Prenatal checkup', notes: 'Everything normal' },
+];
 
 const DoctorDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useThemeContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [activeTab, setActiveTab] = useState(0);
+
+  const navItems = [
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/doctor-dashboard' },
+    { text: 'My Appointments', icon: <CalendarToday />, path: '/appointments' },
+    { text: 'Records', icon: <Description />, path: '/records' },
+    { text: 'Patients', icon: <People />, path: '/patients' },
+  ];
+
+  useEffect(() => {
+    const index = navItems.findIndex(item => item.path === location.pathname);
+    if (index !== -1) {
+      setActiveTab(index);
+    }
+  }, [location.pathname]);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [editData, setEditData] = useState({ name: user?.name || '', email: user?.email || '' });
@@ -20,6 +56,14 @@ const DoctorDashboard: React.FC = () => {
   const [appointmentNotes, setAppointmentNotes] = useState('');
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Appointment>>({});
+  
+  const [records, setRecords] = useState<MedicalRecord[]>(initialRecords);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [viewRecordDialogOpen, setViewRecordDialogOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null);
+  const [viewRecord, setViewRecord] = useState<MedicalRecord | null>(null);
+  const [recordFormData, setRecordFormData] = useState<Partial<MedicalRecord>>({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   const matchedDoctor: Doctor | undefined = dummyDoctors.find(d => 
     d.name.toLowerCase().includes(user?.name?.toLowerCase().split(' ').pop() || '') ||
@@ -36,6 +80,19 @@ const DoctorDashboard: React.FC = () => {
   const confirmedCount = doctorAppointments.filter(apt => apt.status === 'Confirmed').length;
   const pendingCount = doctorAppointments.filter(apt => apt.status === 'Pending').length;
   const cancelledCount = doctorAppointments.filter(apt => apt.status === 'Cancelled').length;
+
+  const doctorRecords = records.filter(r => r.doctorId === doctorId);
+  const totalRecords = doctorRecords.length;
+  const consultationCount = doctorRecords.filter(r => r.type === 'Consultation').length;
+  const prescriptionCount = doctorRecords.filter(r => r.type === 'Prescription').length;
+  const labResultCount = doctorRecords.filter(r => r.type === 'Lab Result').length;
+
+  const filteredRecords = doctorRecords.filter(r => {
+    const patientName = dummyPatients.find(p => p.id === r.patientId)?.name.toLowerCase() || '';
+    return patientName.includes(searchQuery.toLowerCase()) ||
+           r.diagnosis.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           r.date.includes(searchQuery);
+  });
 
   const stats = [
     { label: 'Total Appointments', value: totalPatients, icon: <CalendarToday />, color: '#667eea' },
@@ -128,175 +185,297 @@ const DoctorDashboard: React.FC = () => {
     Cancelled: 'error'
   };
 
-  return (
-    <>
-      <AppBar position="fixed" sx={{ background: isDarkMode ? 'rgba(18,18,18,0.95)' : 'rgba(255,255,255,0.95)', boxShadow: '0 2px 20px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)', zIndex: 1200 }}>
-        <Container maxWidth="xl">
-          <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 60, md: 70 } }}>
-            <Box 
-              component={Link} 
-              to="/doctor-dashboard"
-              sx={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}
-            >
-              <Box 
-                component="img"
-                src={logoImage}
-                alt="HCAPMS Logo"
-                sx={{ width: 40, height: 40, objectFit: 'contain' }}
-              />
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isDarkMode}
-                    onChange={toggleTheme}
-                    sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': {
-                        color: '#667eea',
-                      },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                        backgroundColor: '#667eea',
-                      },
-                    }}
-                  />
+  const drawer = (
+    <Box sx={{ width: drawerWidth, height: '100%', display: 'flex', flexDirection: 'column', background: isDarkMode ? '#1a1a2e' : '#fff', borderRight: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}` }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box 
+          component="img"
+          src={logoImage}
+          alt="HCAPMS Logo"
+          sx={{ width: 40, height: 40, objectFit: 'contain' }}
+        />
+        <Typography variant="h6" sx={{ fontWeight: 700, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          HCAPMS
+        </Typography>
+      </Box>
+      <Divider />
+      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 2, bgcolor: isDarkMode ? 'rgba(102,126,234,0.1)' : 'rgba(102,126,234,0.05)', mx: 1, borderRadius: 2, mb: 1 }}>
+        <Avatar sx={{ width: 40, height: 40, bgcolor: '#667eea', fontSize: 18 }}>
+          {user?.name?.charAt(0).toUpperCase()}
+        </Avatar>
+        <Box sx={{ overflow: 'hidden' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: isDarkMode ? '#fff' : '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {matchedDoctor?.name || user?.name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            Doctor
+          </Typography>
+        </Box>
+      </Box>
+      <Divider sx={{ mb: 1 }} />
+      <List sx={{ flex: 1, px: 1 }}>
+        {navItems.map((item, index) => (
+          <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              onClick={() => {
+                setActiveTab(index);
+                if (item.path !== location.pathname) {
+                  navigate(item.path);
                 }
-                label={isDarkMode ? 'Dark' : 'Light'}
-                sx={{ color: isDarkMode ? '#fff' : '#333' }}
-              />
-              
-              <IconButton onClick={handleMenuOpen} sx={{ color: isDarkMode ? '#fff' : '#333' }}>
-                <AccountCircle />
-              </IconButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-                PaperProps={{
-                  sx: {
-                    backgroundColor: isDarkMode ? '#1e1e1e' : '#fff',
-                    color: isDarkMode ? '#fff' : '#333'
-                  }
+              }}
+              selected={activeTab === index}
+              sx={{
+                borderRadius: 2,
+                py: 1.2,
+                '&.Mui-selected': {
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: '#fff',
+                  '&:hover': { background: 'linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%)' },
+                },
+                '&:hover': { background: isDarkMode ? 'rgba(102,126,234,0.2)' : 'rgba(102,126,234,0.1)' },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 44, color: 'inherit' }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+      <Divider />
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="caption" color="text.secondary">Theme</Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={isDarkMode}
+                onChange={toggleTheme}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: '#667eea' },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#667eea' },
                 }}
-              >
-                <MenuItem onClick={() => { setProfileOpen(true); handleMenuClose(); }}>
-                  <Settings sx={{ mr: 1 }} /> Manage Profile
-                </MenuItem>
-                <MenuItem onClick={() => { handleLogout(); handleMenuClose(); }}>
-                  <Logout sx={{ mr: 1 }} /> Logout
-                </MenuItem>
-              </Menu>
-            </Box>
-          </Toolbar>
-        </Container>
-      </AppBar>
+              />
+            }
+            label=""
+            sx={{ m: 0 }}
+          />
+        </Box>
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<Settings />}
+          onClick={() => setProfileOpen(true)}
+          sx={{ mb: 1, borderColor: isDarkMode ? '#444' : '#ddd', color: isDarkMode ? '#fff' : '#333', '&:hover': { borderColor: '#667eea' } }}
+        >
+          Profile
+        </Button>
+        <Button
+          fullWidth
+          variant="outlined"
+          color="error"
+          startIcon={<Logout />}
+          onClick={handleLogout}
+          sx={{ borderColor: isDarkMode ? '#444' : '#ddd', color: isDarkMode ? '#ff6b6b' : '#f44336', '&:hover': { borderColor: '#f44336' } }}
+        >
+          Logout
+        </Button>
+      </Box>
+    </Box>
+  );
 
-      <Box sx={{ height: { xs: 60, md: 70 } }} />
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: 'none', md: 'block' },
+          '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, border: 'none' },
+        }}
+        open
+      >
+        {drawer}
+      </Drawer>
 
-      <Container maxWidth="xl" sx={{ mb: 4 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { md: `calc(100% - ${drawerWidth}px)` },
+          minHeight: '100vh',
+          backgroundColor: isDarkMode ? '#121212' : '#f5f5f5',
+          p: { xs: 2, md: 4 },
+        }}
+      >
+      <Container maxWidth="xl" sx={{ mb: 4, pl: { xs: 0, md: 2 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 600 }}>
-            Welcome, {matchedDoctor?.name || user?.name}!
+            {activeTab === 0 ? `Welcome, ${matchedDoctor?.name || user?.name}!` : 'My Appointments'}
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Here's your schedule.
+            {activeTab === 0 ? "Here's your schedule overview." : 'View and manage your appointments'}
           </Typography>
         </Box>
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {stats.map((stat) => (
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={stat.label}>
-            <Card sx={{ borderRadius: 2 }}>
+      {activeTab === 0 ? (
+        <>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff' }}>
               <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ 
-                  width: 48, height: 48, borderRadius: 2, 
-                  background: `${stat.color}20`, display: 'flex', 
-                  alignItems: 'center', justifyContent: 'center', color: stat.color 
-                }}>
-                  {stat.icon}
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CalendarToday />
                 </Box>
                 <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{stat.value}</Typography>
-                  <Typography variant="body2" color="text.secondary">{stat.label}</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{totalPatients}</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Total Appointments</Typography>
                 </Box>
               </CardContent>
             </Card>
           </Grid>
-        ))}
-      </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)', color: '#fff' }}>
+              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <TrendingUp />
+                </Box>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{confirmedCount}</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Confirmed</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: '#fff' }}>
+              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Description />
+                </Box>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{pendingCount}</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Pending</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #f44336 0%, #c62828 100%)', color: '#fff' }}>
+              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <People />
+                </Box>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{cancelledCount}</Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Cancelled</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-              My Appointments
-            </Typography>
-            {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.map((apt, idx) => (
-                <Box key={idx} sx={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  p: 2, mb: 1, borderRadius: 1,
-                  bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5'
-                }}>
-                  <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>{apt.patientName}</Typography>
-                    <Typography variant="body2" color="text.secondary">{apt.type} - {apt.date} at {apt.time}</Typography>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Paper sx={{ p: 3, borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Upcoming Appointments
+              </Typography>
+              {upcomingAppointments.length > 0 ? (
+                upcomingAppointments.map((apt, idx) => (
+                  <Box key={idx} sx={{ 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    p: 2, mb: 1, borderRadius: 1,
+                    bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5'
+                  }}>
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>{apt.patientName}</Typography>
+                      <Typography variant="body2" color="text.secondary">{apt.type} - {apt.date} at {apt.time}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label={apt.status} color={statusColors[apt.status]} size="small" />
+                      <IconButton size="small" onClick={() => handleEditAppointment(apt)} color="primary">
+                        <Edit fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => handleCancelAppointment(apt.id)} color="error" title="Cancel Appointment">
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))
+              ) : (
+                <Typography color="text.secondary">No upcoming appointments.</Typography>
+              )}
+            </Paper>
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Paper sx={{ p: 3, borderRadius: 2, height: '100%' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Appointment Status
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                  <Box sx={{ position: 'relative', width: 150, height: 150, borderRadius: '50%', background: `conic-gradient(#4caf50 0% ${(confirmedCount/totalPatients)*100}%, #ff9800 ${(confirmedCount/totalPatients)*100}% ${(confirmedCount/totalPatients + pendingCount/totalPatients)*100}%, #f44336 ${(confirmedCount/totalPatients + pendingCount/totalPatients)*100}% 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Box sx={{ width: 100, height: 100, borderRadius: '50%', bgcolor: isDarkMode ? '#1e1e1e' : '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700 }}>{totalPatients}</Typography>
+                      <Typography variant="caption" color="text.secondary">Total</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 1, bgcolor: '#4caf50' }} />
+                    <Typography variant="caption">Confirmed ({confirmedCount})</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip 
-                      label={apt.status} 
-                      color={statusColors[apt.status]} 
-                      size="small" 
-                    />
-                    <IconButton size="small" onClick={() => handleEditAppointment(apt)} color="primary">
-                      <Edit fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleCancelAppointment(apt.id)} color="error" title="Cancel Appointment">
-                      <Delete fontSize="small" />
-                    </IconButton>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 1, bgcolor: '#ff9800' }} />
+                    <Typography variant="caption">Pending ({pendingCount})</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: 1, bgcolor: '#f44336' }} />
+                    <Typography variant="caption">Cancelled ({cancelledCount})</Typography>
                   </Box>
                 </Box>
-              ))
-            ) : (
-              <Typography color="text.secondary">No appointments found.</Typography>
-            )}
-          </Paper>
+              </Box>
+            </Paper>
+          </Grid>
         </Grid>
-
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-              My Information
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ width: 56, height: 56, bgcolor: '#667eea', fontSize: 24 }}>
-                  {user?.name?.charAt(0).toUpperCase()}
-                </Avatar>
+        </>
+      ) : (
+        <Paper sx={{ p: 3, borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            All My Appointments
+          </Typography>
+          {doctorAppointments.length > 0 ? (
+            doctorAppointments.map((apt, idx) => (
+              <Box key={idx} sx={{ 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                p: 2, mb: 1, borderRadius: 1,
+                bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5'
+              }}>
                 <Box>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{user?.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">Doctor</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>{apt.patientName}</Typography>
+                  <Typography variant="body2" color="text.secondary">{apt.type} - {apt.date} at {apt.time}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip label={apt.status} color={statusColors[apt.status]} size="small" />
+                  <IconButton size="small" onClick={() => handleEditAppointment(apt)} color="primary">
+                    <Edit fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => handleCancelAppointment(apt.id)} color="error" title="Cancel Appointment">
+                    <Delete fontSize="small" />
+                  </IconButton>
                 </Box>
               </Box>
-              <Box sx={{ p: 2, borderRadius: 1, bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Email</Typography>
-                <Typography variant="body1">{user?.email}</Typography>
-              </Box>
-              <Box sx={{ p: 2, borderRadius: 1, bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Department</Typography>
-                <Typography variant="body1">{matchedDoctor?.department || 'General Medicine'}</Typography>
-              </Box>
-              <Box sx={{ p: 2, borderRadius: 1, bgcolor: isDarkMode ? '#2d2d2d' : '#f5f5f5' }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Role</Typography>
-                <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>{user?.role}</Typography>
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
+            ))
+          ) : (
+            <Typography color="text.secondary">No appointments found.</Typography>
+          )}
+        </Paper>
+      )}
 
       <Dialog open={selectedAppointment !== null} onClose={handleCloseManage} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -469,8 +648,9 @@ const DoctorDashboard: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
-    </>
+      </Container>
+      </Box>
+    </Box>
   );
 };
 

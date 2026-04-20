@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState, type ReactNode } from 'react';
 
 export type UserRole = 'admin' | 'doctor' | 'patient';
 
@@ -33,19 +34,18 @@ interface StoredUser {
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem(CURRENT_USER_KEY);
     if (stored) {
       try {
         const userData = JSON.parse(stored);
-        setUser({ ...userData, password: undefined });
+        return { ...userData, password: undefined };
       } catch {
         localStorage.removeItem(CURRENT_USER_KEY);
       }
     }
-  }, []);
+    return null;
+  });
 
   const getUsers = (): StoredUser[] => {
     const stored = localStorage.getItem(USERS_KEY);
@@ -61,6 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const foundUser = users.find(u => u.email === email && u.password === password);
     
     if (foundUser) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: _, ...userWithoutPassword } = foundUser;
       setUser(userWithoutPassword);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userWithoutPassword));
@@ -87,6 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     users.push(newUser);
     saveUsers(users);
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = newUser;
     setUser(userWithoutPassword);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userWithoutPassword));
